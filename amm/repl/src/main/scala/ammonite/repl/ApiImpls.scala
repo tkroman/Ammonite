@@ -12,6 +12,7 @@ import scala.collection.mutable
 
 class SessionApiImpl(eval: Evaluator) extends Session{
   val namedFrames = mutable.Map.empty[String, List[Frame]]
+  var hasSaved = false
   def frames = eval.frames
   def childFrame(parent: Frame) = new Frame(
     new SpecialClassLoader(
@@ -29,28 +30,36 @@ class SessionApiImpl(eval: Evaluator) extends Session{
   def save(name: String = "") = {
     if (name != "") namedFrames(name) = eval.frames
     eval.frames = childFrame(frames.head) :: frames
+    hasSaved = true
   }
 
   def pop(num: Int = 1) = {
     var next = eval.frames
-    for(i <- 0 until num){
+    for (i <- 0 until num) {
       if (next.tail != Nil) next = next.tail
     }
     val out = SessionChanged.delta(eval.frames.head, next.head)
     eval.frames = childFrame(next.head) :: next
     out
   }
+
   def load(name: String = "") = {
-    val next = if (name == "") eval.frames.tail else namedFrames(name)
-    val out = SessionChanged.delta(eval.frames.head, next.head)
-    eval.frames = childFrame(next.head) :: next
-    out
+    if (!hasSaved) {
+      throw new Exception("No saved session found. Make sure `repl.sess.save()` was called beforehand.")
+    } else {
+      val next = if (name == "") eval.frames.tail else namedFrames(name)
+      val out = SessionChanged.delta(eval.frames.head, next.head)
+      eval.frames = childFrame(next.head) :: next
+      out
+    }
   }
 
   def delete(name: String) = {
     namedFrames.remove(name)
   }
+
   save()
+  hasSaved = false
 }
 class ReplApiImpl(val interp: Interpreter,
                   width0: => Int,
